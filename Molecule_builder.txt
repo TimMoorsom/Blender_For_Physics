@@ -1,0 +1,74 @@
+import bpy
+import json
+
+from math import acos
+from mathutils import Vector
+
+def draw_molecule(molecule):
+    
+    radii = { 'C': 70, 'N': 71, 'O': 66, 'bond': 20, 'S': 105, 'H':31, 'P':107}
+    for key in radii.keys():
+        radii[key] *= 0.4/30
+    """Draw a molecule to blender."""
+    for atom in molecule["atoms"]:
+        
+        if atom["element"][0] in bpy.data.materials.keys():
+            if atom["element"][0] in radii.keys():
+                s=radii[atom["element"][0]]
+            else:
+                s=3.0
+                
+            bpy.ops.mesh.primitive_uv_sphere_add(scale=(s,s,s), location=atom["location"])
+            bpy.ops.object.shade_smooth()
+            bpy.context.active_object.data.materials.append(bpy.data.materials[atom["element"][0]])
+        else:
+            if atom["element"][0] in radii.keys():
+                s=radii[atom["element"][0]]
+            else:
+                s=2.0
+            bpy.data.materials.new(atom["element"][0])
+            bpy.ops.mesh.primitive_uv_sphere_add(scale=(s,s,s), location=atom["location"])
+            bpy.ops.object.shade_smooth()
+            bpy.context.active_object.data.materials.append(bpy.data.materials[atom["element"][0]])
+                       
+    for bond in molecule["bonds"]:
+        
+        if not 'bond' in bpy.data.materials.keys():
+            bpy.data.materials.new('bond')
+
+        # Extracting locations
+        first_loc = molecule["atoms"][bond["atoms"][0]]["location"]
+        second_loc = molecule["atoms"][bond["atoms"][1]]["location"]
+
+        # Useful values
+        diff = tuple([c2-c1 for c2, c1 in zip(first_loc, second_loc)])
+        center = tuple([(c2+c1)/2 for c2, c1 in zip(first_loc, second_loc)])
+        magnitude = pow(sum([(c2-c1)**2
+                        for c1, c2 in zip(first_loc, second_loc)]), 0.5)
+
+        # Euler rotation calculation, (Vector from mathutils, acos from math)
+        Vaxis = Vector(diff).normalized()
+        Vobj = Vector((0,0,1))
+        angle_x = Vobj.angle(Vector((0,1,0))*Vaxis.y + Vector((0,0,1))*Vaxis.z)
+    
+        # Specify locations of each bond in every scenario
+        if bond["order"] == 1:
+            trans = [[0] * 3]
+        elif bond["order"] == 2:
+            trans = [[0.1  * x for x in Vobj],
+                [-0.1 * x for x in Vobj]]
+        elif bond["order"] == 3:
+            trans = [[0] * 3, [0.2 * x for x in Vobj],
+                [-0.2 * x for x in Vobj]]
+        # Draw bonds
+        for tran in trans:
+            bpy.ops.mesh.primitive_cylinder_add(radius=0.1, depth=magnitude,location=center)
+            bpy.ops.object.shade_smooth()
+            bpy.context.active_object.data.materials.append(bpy.data.materials['bond'])
+            bpy.context.object.rotation_mode = 'QUATERNION'
+            bpy.context.object.rotation_quaternion = Vaxis.to_track_quat('Z','Y')
+            bpy.ops.transform.translate(value=tran)
+
+with open("D:/Blender Tutorials/phosphate-deoxyribose.json") as in_file:
+    MolA = json.load(in_file)
+draw_molecule(MolA)
